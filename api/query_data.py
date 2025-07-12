@@ -11,7 +11,6 @@ from config.params import config
 
 
 class SheetDataQueryError(Exception):
-    """表格数据查询异常"""
     pass
 
 
@@ -19,13 +18,12 @@ class SheetDataQuery:
     """表格数据查询类"""
     
     def __init__(self):
-        """初始化查询客户端"""
         self.base_url = config.sheet_base_url
-        self.timeout = 30  # 请求超时时间
+        self.timeout = 30  
         self.range_calculator = get_range_calculator()
     
 
-    def _query_single_range(
+    def query_single(
         self,
         file_id: str,
         sheet_id: str,
@@ -53,7 +51,7 @@ class SheetDataQuery:
             url = f"{self.base_url}{file_id}/{sheet_id}/{range_str}"
 
             # 构建请求头
-            headers = config.get_sheet_headers(access_token, client_id, open_id)
+            headers = config.get_headers(access_token, client_id, open_id)
 
             logger.debug(f"Querying single range: {range_str}")
 
@@ -90,7 +88,7 @@ class SheetDataQuery:
             logger.error(error_msg)
             raise SheetDataQueryError(error_msg)
 
-    def _merge_grid_data(self, grid_data_list: List[Dict[str, Any]], ranges: List[str]) -> Dict[str, Any]:
+    def merge_griddata(self, griddata_list: List[Dict[str, Any]], ranges: List[str]) -> Dict[str, Any]:
         """
         合并多个gridData为统一的数据结构
 
@@ -102,20 +100,20 @@ class SheetDataQuery:
             合并后的gridData
         """
         try:
-            if not grid_data_list:
+            if not griddata_list:
                 return {}
 
-            if len(grid_data_list) == 1:
-                return grid_data_list[0]
+            if len(griddata_list) == 1:
+                return griddata_list[0]
 
             # 解析每个范围的起始位置
             range_positions = []
             for range_str in ranges:
-                start_cell, _ = self.range_calculator._parse_a1_notation(range_str)
+                start_cell, _ = self.range_calculator.parse_a1(range_str)
                 range_positions.append(start_cell)
 
             # 初始化合并结果
-            merged_data = {
+            merge_data = {
                 "columnMetadata": [],
                 "rowMetadata": [],
                 "rows": [],
@@ -132,11 +130,11 @@ class SheetDataQuery:
             # 创建行数据映射
             row_data_map = {}
 
-            for grid_data, (start_row, start_col) in zip(grid_data_list, range_positions):
-                if not grid_data or 'rows' not in grid_data:
+            for griddata, (start_row, start_col) in zip(griddata_list, range_positions):
+                if not griddata or 'rows' not in griddata:
                     continue
 
-                rows = grid_data.get('rows', [])
+                rows = griddata.get('rows', [])
 
                 for row_idx, row in enumerate(rows):
                     # 计算全局行号
@@ -168,7 +166,7 @@ class SheetDataQuery:
                                 "cellValue": {"text": ""},
                                 "dataType": "DATA_TYPE_UNSPECIFIED"
                             })
-                    merged_data["rows"].append({"values": row_values})
+                    merge_data["rows"].append({"values": row_values})
                 else:
                     # 填充空行
                     row_values = []
@@ -179,15 +177,15 @@ class SheetDataQuery:
                             "cellValue": {"text": ""},
                             "dataType": "DATA_TYPE_UNSPECIFIED"
                         })
-                    merged_data["rows"].append({"values": row_values})
+                    merge_data["rows"].append({"values": row_values})
 
-            merged_data["startRow"] = min_row - 1  # 转换为0基索引
-            merged_data["startColumn"] = min_col - 1  # 转换为0基索引
+            merge_data["startRow"] = min_row - 1  # 转换为0基索引
+            merge_data["startColumn"] = min_col - 1  # 转换为0基索引
 
-            logger.info(f"Merged {len(grid_data_list)} grid data into single result "
-                       f"({len(merged_data['rows'])} rows, {max_col - min_col + 2} columns)")
+            logger.info(f"Merged {len(griddata_list)} grid data into single result "
+                       f"({len(merge_data['rows'])} rows, {max_col - min_col + 2} columns)")
 
-            return merged_data
+            return merge_data
 
         except Exception as e:
             logger.error(f"Failed to merge grid data: {e}")
@@ -222,14 +220,14 @@ class SheetDataQuery:
                 raise SheetDataQueryError(f"Invalid range format: {range_str}")
 
             logger.info(f"Querying sheet data: file_id={file_id}, sheet_id={sheet_id}, range={range_str}")
-            return self._query_single_range(file_id, sheet_id, range_str, access_token, client_id, open_id)
+            return self.query_single(file_id, sheet_id, range_str, access_token, client_id, open_id)
 
 
         except Exception as e:
             logger.error(f"Failed to query sheet data: {e}")
             raise SheetDataQueryError(f"Failed to query sheet data: {e}")
 
-    def _query_with_chunking(
+    def query_block(
         self,
         file_id: str,
         sheet_id: str,
@@ -254,60 +252,60 @@ class SheetDataQuery:
         """
         try:
             # 解析范围以确定工作表大小
-            start_cell, end_cell = self.range_calculator._parse_a1_notation(range_str)
+            start_cell, end_cell = self.range_calculator.parse_a1(range_str)
             end_row, end_col = end_cell
 
             # 临时SheetInfo
             temp_sheet_info = SheetInfo(sheet_id, end_row, end_col)
 
             # 获取分块范围列表，chunk为ranges_str的列表
-            adjusted_ranges = self.range_calculator.split_large_range(temp_sheet_info)
+            adjusted_ranges = self.range_calculator.split_range(temp_sheet_info)
 
             logger.info(f"Split range {range_str} into {len(adjusted_ranges)} chunks")
 
             # 执行分块查询
-            grid_data_list = []
+            griddata_list = []
             successful_ranges = []
 
-            for i, chunk_range in enumerate(adjusted_ranges, 1):
+            for i, block_range in enumerate(adjusted_ranges, 1):
                 try:
-                    logger.debug(f"Querying chunk {i}/{len(adjusted_ranges)}: {chunk_range}")
+                    logger.debug(f"Querying chunk {i}/{len(adjusted_ranges)}: {block_range}")
                     # 获得子块的数据
                     result = self.query_sheet_data(
                         file_id=file_id,
                         sheet_id=sheet_id,
-                        range_str=chunk_range,
+                        range_str=block_range,
                         access_token=access_token,
                         client_id=client_id,
                         open_id=open_id
                     )
                     
-                    grid_data = result.get('data', {}).get('gridData')
-                    if grid_data:
-                        grid_data_list.append(grid_data)
-                        successful_ranges.append(chunk_range)
+                    griddata = result.get('data', {}).get('gridData')
+                    if griddata:
+                        griddata_list.append(griddata)
+                        successful_ranges.append(block_range)
                         logger.debug(f"Successfully queried chunk {i}")
                     else:
-                        logger.warning(f"No grid data in chunk {i}: {chunk_range}")
+                        logger.warning(f"No grid data in chunk {i}: {block_range}")
 
                 except Exception as e:
-                    logger.error(f"Failed to query chunk {i} ({chunk_range}): {e}")
+                    logger.error(f"Failed to query chunk {i} ({block_range}): {e}")
                     # 继续处理其他块
                     continue
 
-            if not grid_data_list:
+            if not griddata_list:
                 raise SheetDataQueryError("All chunk queries failed")
 
             # 合并gridData
-            logger.info(f"Merging {len(grid_data_list)} successful chunks")
-            merged_grid_data = self._merge_grid_data(grid_data_list, successful_ranges)
+            logger.info(f"Merging {len(griddata_list)} successful chunks")
+            merged_griddata = self.merge_griddata(griddata_list, successful_ranges)
 
             # 构建最终响应
             result = {
                 "ret": 0,
                 "msg": "Succeed",
                 "data": {
-                    "gridData": merged_grid_data
+                    "gridData": merged_griddata
                 }
             }
 
@@ -324,8 +322,5 @@ sheet_data_query = SheetDataQuery()
 def get_sheet_data_query() -> SheetDataQuery:
     """
     获取表格数据查询器实例
-
-    Returns:
-        SheetDataQuery实例
     """
     return sheet_data_query

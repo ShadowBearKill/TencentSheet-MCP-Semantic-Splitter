@@ -8,7 +8,6 @@ from utils.logger import logger
 
 
 class RangeCalculatorError(Exception):
-    """范围计算异常"""
     pass
 
 
@@ -85,7 +84,7 @@ class RangeCalculator:
             raise RangeCalculatorError(f"Failed to extract sheet range info: {e}")
 
 
-    def split_large_range(self, sheet_range: SheetInfo) -> List[str]:
+    def split_range(self, sheet_range: SheetInfo) -> List[str]:
         """
         将超出限制的大范围分割为多个符合API限制的子范围
 
@@ -104,10 +103,10 @@ class RangeCalculator:
             # 确定分割策略
             if sheet_range.column_count <= self.MAX_COLUMNS:
                 # 列数不超限，使用行分割
-                ranges = self._split_by_rows(sheet_range)
+                ranges = self.split_by_rows(sheet_range)
             else:
                 # 列数超限，使用块分割
-                ranges = self._split_by_blocks(sheet_range)
+                ranges = self.split_by_blocks(sheet_range)
 
             logger.info(f"Split large range for sheet {sheet_range.sheet_id} into {len(ranges)} sub-ranges")
             return ranges
@@ -116,7 +115,7 @@ class RangeCalculator:
             logger.error(f"Failed to split large range: {e}")
             raise RangeCalculatorError(f"Failed to split large range: {e}")
 
-    def _split_by_rows(self, sheet_range: SheetInfo) -> List[str]:
+    def split_by_rows(self, sheet_range: SheetInfo) -> List[str]:
         """
         按行分割范围
 
@@ -127,7 +126,7 @@ class RangeCalculator:
             A1表示法的查询范围列表
         """
         ranges = []
-        end_col = self._number_to_column_letter(sheet_range.column_count)
+        end_col = self.number_to_column_letter(sheet_range.column_count)
 
         # 计算每个子范围的最大行数
         max_rows_per_chunk = min(self.MAX_ROWS, self.MAX_CELLS // sheet_range.column_count)
@@ -143,7 +142,7 @@ class RangeCalculator:
         logger.debug(f"Row split: {len(ranges)} ranges with max {max_rows_per_chunk} rows each")
         return ranges
 
-    def _split_by_blocks(self, sheet_range: SheetInfo) -> List[str]:
+    def split_by_blocks(self, sheet_range: SheetInfo) -> List[str]:
         """
         按块分割范围
 
@@ -168,8 +167,8 @@ class RangeCalculator:
             while current_col <= sheet_range.column_count:
                 end_col_num = min(current_col + max_cols_per_chunk - 1, sheet_range.column_count)
 
-                start_col = self._number_to_column_letter(current_col)
-                end_col = self._number_to_column_letter(end_col_num)
+                start_col = self.number_to_column_letter(current_col)
+                end_col = self.number_to_column_letter(end_col_num)
 
                 range_str = f"{start_col}{current_row}:{end_col}{end_row}"
                 ranges.append(range_str)
@@ -181,7 +180,7 @@ class RangeCalculator:
         logger.debug(f"Block split: {len(ranges)} ranges with max {max_rows_per_chunk}x{max_cols_per_chunk} each")
         return ranges
     
-    def _number_to_column_letter(self, num: int) -> str:
+    def number_to_column_letter(self, num: int) -> str:
         """
         将列号转换为字母表示（1=A, 2=B, ..., 26=Z, 27=AA, ...）
         
@@ -198,7 +197,7 @@ class RangeCalculator:
             num //= 26
         return result
     
-    def _parse_a1_notation(self, range_str: str) -> Tuple[Tuple[int, int], Tuple[int, int]]:
+    def parse_a1(self, range_str: str) -> Tuple[Tuple[int, int], Tuple[int, int]]:
         """
         解析A1表示法
         
@@ -217,8 +216,8 @@ class RangeCalculator:
         start_col_str, start_row_str, end_col_str, end_row_str = match.groups()
         
         # 转换列字母为数字
-        start_col = self._column_letter_to_number(start_col_str)
-        end_col = self._column_letter_to_number(end_col_str)
+        start_col = self.column_letter_to_number(start_col_str)
+        end_col = self.column_letter_to_number(end_col_str)
         
         # 转换行号
         start_row = int(start_row_str)
@@ -230,7 +229,7 @@ class RangeCalculator:
         
         return (start_row, start_col), (end_row, end_col)
     
-    def _column_letter_to_number(self, letters: str) -> int:
+    def column_letter_to_number(self, letters: str) -> int:
         """
         将列字母转换为数字（A=1, B=2, ..., Z=26, AA=27, ...）
         
@@ -250,10 +249,4 @@ class RangeCalculator:
 range_calculator = RangeCalculator()
 
 def get_range_calculator() -> RangeCalculator:
-    """
-    获取范围计算器实例
-    
-    Returns:
-        RangeCalculator实例
-    """
     return range_calculator

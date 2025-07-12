@@ -7,7 +7,6 @@ from utils.logger import logger
 
 
 class ResponseParseError(Exception):
-    """响应解析异常"""
     pass
 
 
@@ -50,11 +49,7 @@ class CellData:
 class ResponseParser:
     """API响应解析器类"""
     
-    def __init__(self):
-        """初始化解析器"""
-        pass
-    
-    def parse_sheet_data_response(self, response_data: Dict[str, Any]) -> List[CellData]:
+    def parse_sheet_data(self, response_data: Dict[str, Any]) -> List[CellData]:
         """
         解析表格数据API响应
         
@@ -70,18 +65,18 @@ class ResponseParser:
                 raise ResponseParseError("Response data must be a dictionary")
             
             # 提取gridData
-            grid_data = response_data.get('data', {}).get('gridData', {})
+            griddata = response_data.get('data', {}).get('gridData', {})
             
-            if not grid_data:
+            if not griddata:
                 logger.warning("No gridData found in response")
                 return []
             
             # 提取起始位置
-            start_row = grid_data.get('startRow', 0)
-            start_column = grid_data.get('startColumn', 0)
+            start_row = griddata.get('startRow', 0)
+            start_col = griddata.get('startColumn', 0)
             
             # 提取行数据
-            rows = grid_data.get('rows', [])
+            rows = griddata.get('rows', [])
             if not isinstance(rows, list):
                 raise ResponseParseError("Rows must be a list")
             
@@ -99,7 +94,7 @@ class ResponseParser:
                 for col_index, cell in enumerate(values):
                     # 计算实际位置
                     actual_row = start_row + row_index
-                    actual_col = start_column + col_index
+                    actual_col = start_col + col_index
                     
                     # 提取单元格数据
                     cell_data = self.extract_cell_data(actual_row, actual_col, cell)
@@ -148,8 +143,5 @@ response_parser = ResponseParser()
 def get_response_parser() -> ResponseParser:
     """
     获取响应解析器实例
-
-    Returns:
-        ResponseParser实例
     """
     return response_parser

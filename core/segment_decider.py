@@ -6,11 +6,10 @@
 from typing import List, Dict, Any, Optional, Tuple, Set
 from utils.logger import logger
 from core.preprocessor import TextSegment
-from core.similarity_calculator import get_similarity_calculator, SimilarityCalculatorError, SimilarityResult
+from core.similarity_calculator import get_similarity, SimilarityCalculatorError, SimilarityResult
 
 
 class SegmentDeciderError(Exception):
-    """分割决策器异常"""
     pass
 
 
@@ -65,7 +64,7 @@ class SegmentDecider:
         
         # 获取相似度计算器
         try:
-            self.similarity_calculator = get_similarity_calculator(
+            self.similarity_calculator = get_similarity(
                 vector_model=vector_model,
                 enable_vector_cache=enable_vector_cache
             )
@@ -95,10 +94,10 @@ class SegmentDecider:
         
         try:
             # 计算相似度矩阵
-            similarity_results = self._calculate_similarity_matrix(segments)
+            similarity_results = self.calculate_similarity_matrix(segments)
             
             # 基于阈值进行分割决策，分割成一个个连通分量。
-            groups = self._apply_threshold_clustering(segments, similarity_results)
+            groups = self.apply_threshold_clustering(segments, similarity_results)
             
             logger.info(f"Segment decision completed: {len(groups)} groups created")
             return groups
@@ -135,7 +134,7 @@ class SegmentDecider:
             # 恢复原始阈值
             self.similarity_threshold = original_threshold
     
-    def _calculate_similarity_matrix(self, segments: List[TextSegment]) -> List[SimilarityResult]:
+    def calculate_similarity_matrix(self, segments: List[TextSegment]) -> List[SimilarityResult]:
         """
         计算片段间的相似度矩阵
         
@@ -155,7 +154,7 @@ class SegmentDecider:
         except SimilarityCalculatorError as e:
             raise SegmentDeciderError(f"Similarity calculation failed: {e}")
     
-    def _apply_threshold_clustering(self, segments: List[TextSegment], 
+    def apply_threshold_clustering(self, segments: List[TextSegment], 
                                   similarity_results: List[SimilarityResult]) -> List[SegmentGroup]:
         """
         基于阈值进行聚类分组
@@ -181,12 +180,12 @@ class SegmentDecider:
                 adjacency[idx2].add(idx1)
         
         # 使用邻接表查找连通分量
-        groups = self._find_connected_components(segments, adjacency)
+        groups = self.find_connected_components(segments, adjacency)
         
         logger.debug(f"Threshold clustering created {len(groups)} groups")
         return groups
     
-    def _find_connected_components(self, segments: List[TextSegment], 
+    def find_connected_components(self, segments: List[TextSegment], 
                                  adjacency: Dict[int, Set[int]]) -> List[SegmentGroup]:
         """
         查找连通分量（连通子图）
@@ -256,7 +255,7 @@ class SegmentDecider:
             "single_segment_groups": single_segment_groups
         }
     
-    def analyze_threshold_impact(self, segments: List[TextSegment], 
+    def analyze_threshold(self, segments: List[TextSegment], 
                                thresholds: List[float]) -> Dict[float, Dict[str, Any]]:
         """
         分析不同阈值对分割结果的影响
@@ -299,17 +298,6 @@ segment_decider = None
 def get_segment_decider(similarity_threshold: float = 0.7,
                        vector_model: Optional[str] = None,
                        enable_vector_cache: bool = True) -> SegmentDecider:
-    """
-    获取分割决策器实例
-    
-    Args:
-        similarity_threshold: 相似度阈值
-        vector_model: 向量模型名称
-        enable_vector_cache: 是否启用向量缓存
-        
-    Returns:
-        分割决策器实例
-    """
     global segment_decider
     if segment_decider is None:
         segment_decider = SegmentDecider(

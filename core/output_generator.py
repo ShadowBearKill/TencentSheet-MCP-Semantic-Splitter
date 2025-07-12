@@ -12,29 +12,14 @@ from core.segment_optimizer import SegmentGroup
 from core.preprocessor import TextSegment
 
 
-class OutputGeneratorError(Exception):
-    """输出生成器异常"""
+class OutputError(Exception):
     pass
 
 
-class OutputGenerator:
+class Output:
     """输出生成器类"""
     
-    def __init__(self, include_metadata: bool = True, include_quality_report: bool = True):
-        """
-        初始化输出生成器
-        
-        Args:
-            include_metadata: 是否包含元数据
-            include_quality_report: 是否包含质量报告
-        """
-        self.include_metadata = include_metadata
-        self.include_quality_report = include_quality_report
-        
-        logger.info(f"OutputGenerator initialized with metadata={include_metadata}, quality_report={include_quality_report}")
-
-    
-    def _generate_quality_report(self, groups: List[SegmentGroup]) -> Dict[str, Any]:
+    def generate_quality_report(self, groups: List[SegmentGroup]) -> Dict[str, Any]:
         """
         生成质量报告
         
@@ -59,7 +44,7 @@ class OutputGenerator:
             max_length = max(segment_lengths)
             avg_length = sum(segment_lengths) / len(segment_lengths)
             
-            # 计算长度一致性得分（基于标准差）
+            # 计算长度一致性得分
             variance = sum((length - avg_length) ** 2 for length in segment_lengths) / len(segment_lengths)
             std_dev = variance ** 0.5
             consistency_score = max(0, 1 - (std_dev / avg_length)) if avg_length > 0 else 0
@@ -71,7 +56,7 @@ class OutputGenerator:
         avg_group_size = sum(group_sizes) / len(group_sizes) if group_sizes else 0
         
         # 计算总体质量得分
-        quality_score = self._calculate_quality_score(
+        quality_score = self.calculate_quality_score(
             consistency_score, avg_length, avg_group_size, len(groups)
         )
         
@@ -89,12 +74,12 @@ class OutputGenerator:
                 },
                 "group_stats": {
                     "avg_size": round(avg_group_size, 2),
-                    "size_distribution": self._get_size_distribution(group_sizes)
+                    "size_distribution": self.get_size_distribution(group_sizes)
                 }
             }
         }
     
-    def _calculate_quality_score(self, consistency_score: float, avg_length: float,
+    def calculate_quality_score(self, consistency_score: float, avg_length: float,
                                avg_group_size: float, group_count: int) -> float:
         """
         计算总体质量得分
@@ -133,7 +118,7 @@ class OutputGenerator:
         
         return sum(w * s for w, s in zip(weights, scores))
     
-    def _get_size_distribution(self, sizes: List[int]) -> Dict[str, int]:
+    def get_size_distribution(self, sizes: List[int]) -> Dict[str, int]:
         """
         获取大小分布统计
         
@@ -177,28 +162,14 @@ class OutputGenerator:
         except Exception as e:
             error_msg = f"Failed to save output to file {filepath}: {e}"
             logger.error(error_msg)
-            raise OutputGeneratorError(error_msg)
+            raise OutputError(error_msg)
 
 
 # 全局实例
 output_generator = None
 
-def get_output_generator(include_metadata: bool = True, 
-                        include_quality_report: bool = True) -> OutputGenerator:
-    """
-    获取输出生成器实例
-    
-    Args:
-        include_metadata: 是否包含元数据
-        include_quality_report: 是否包含质量报告
-        
-    Returns:
-        输出生成器实例
-    """
+def get_output_generator() -> Output:
     global output_generator
     if output_generator is None:
-        output_generator = OutputGenerator(
-            include_metadata=include_metadata,
-            include_quality_report=include_quality_report
-        )
+        output_generator = Output()
     return output_generator

@@ -16,7 +16,7 @@ from api.query_info import get_sheet_info_query
 from api.query_data import get_sheet_data_query
 from api.response_parser import get_response_parser
 from core.preprocessor import get_preprocessor
-from core.similarity_calculator import get_similarity_calculator
+from core.similarity_calculator import get_similarity
 from core.segment_decider import get_segment_decider
 from core.segment_optimizer import get_segment_optimizer
 from core.output_generator import get_output_generator
@@ -41,7 +41,7 @@ class SemanticSplitter:
         self.data_query = get_sheet_data_query()
         self.response_parser = get_response_parser()
         self.preprocessor = get_preprocessor()
-        self.similarity_calculator = get_similarity_calculator()
+        self.similarity_calculator = get_similarity()
         self.segment_decider = get_segment_decider()
         self.segment_optimizer = get_segment_optimizer()
         self.output_generator = get_output_generator()
@@ -70,18 +70,18 @@ class SemanticSplitter:
         try:
             # 步骤1: 获取表格信息
             logger.info("Step 1: Querying sheet information...")
-            sheet_info = self._query_sheet_info(
+            sheet_info = self.query_sheet_info(
                 sheet_access_token, sheet_client_id, file_id, user_open_id
             )
             # 处理所有工作表
             logger.info("Processing all sheets in the spreadsheet")
-            sheet_results = self._process_all_sheets(
+            sheet_results = self.process_all_sheets(
                 sheet_access_token, sheet_client_id, file_id, user_open_id, split_type, sheet_info
             )
 
             # 步骤3: 合并结果并生成输出
             logger.info("Step 3: Merging results and generating output...")
-            output = self._merge_sheet_results(sheet_results, sheet_info)
+            output = self.merge_results(sheet_results, sheet_info)
 
             # 步骤5: 保存输出
             if output_file:
@@ -96,11 +96,11 @@ class SemanticSplitter:
             logger.error(error_msg)
             raise SemanticSplitterError(error_msg)
     
-    def _query_sheet_info(self, access_token: str, client_id: str,
+    def query_sheet_info(self, access_token: str, client_id: str,
                          file_id: str, open_id: str) -> Dict[str, Any]:
         """查询表格信息"""
         try:
-            return self.info_query.query_sheet_info(
+            return self.info_query.query(
                 file_id=file_id,
                 access_token=access_token,
                 client_id=client_id,
@@ -110,7 +110,7 @@ class SemanticSplitter:
         except Exception as e:
             raise SemanticSplitterError(f"Failed to query sheet info: {e}")
     
-    def _query_sheet_data(self, access_token: str, client_id: str,
+    def query_sheet_data(self, access_token: str, client_id: str,
                          file_id: str, open_id: str, split_type: int, sheet_range: SheetInfo) -> Dict[str, Any]:
         """
         查询表格数据（支持大范围自动分块查询）
@@ -137,13 +137,13 @@ class SemanticSplitter:
                 sheet_range.column_count > max_columns or
                 sheet_range.row_count * sheet_range.column_count > max_cells
             )
-            end_col = self.range_calculator._number_to_column_letter(sheet_range.column_count)
+            end_col = self.range_calculator.number_to_column_letter(sheet_range.column_count)
             full_range = f"A1:{end_col}{sheet_range.row_count}"
             if needs_chunking:
                 # 工作表超出限制，使用分块查询处理完整数据
                 logger.info(f"Sheet {sheet_range.sheet_id} size ({sheet_range.row_count}x{sheet_range.column_count}) "
                            f"exceeds API limits, using chunked query (split_type: {split_type})")
-                return self.data_query._query_with_chunking(
+                return self.data_query.query_block(
                     file_id, sheet_range.sheet_id, full_range, access_token, client_id, open_id
                 )
             else:
@@ -163,7 +163,7 @@ class SemanticSplitter:
             raise SemanticSplitterError(f"Failed to query sheet data: {e}")
 
 
-    def _extract_sheet_range_info(self, sheet_info: Dict[str, Any]) -> List[SheetInfo]:
+    def extract_sheet_info(self, sheet_info: Dict[str, Any]) -> List[SheetInfo]:
         """从表格信息中提取工作表信息"""
         try:
             return self.range_calculator.extract_sheet_range_info(sheet_info)
@@ -171,7 +171,7 @@ class SemanticSplitter:
             logger.error(f"Failed to extract sheet range info: {e}")
             return []
 
-    def _process_single_sheet(self, access_token: str, client_id: str,
+    def process_single_sheet(self, access_token: str, client_id: str,
                              file_id: str, open_id: str, split_type: int, sheet_range: SheetInfo) -> Dict[str, Any]:
         """
         处理单个工作表
@@ -189,19 +189,19 @@ class SemanticSplitter:
         """
         try:
             # 获取完整表格数据
-            sheet_data = self._query_sheet_data(access_token, client_id, file_id, open_id, split_type, sheet_range)
+            sheet_data = self.query_sheet_data(access_token, client_id, file_id, open_id, split_type, sheet_range)
 
             # 解析响应数据
-            parsed_data = self._parse_response_data(sheet_data)
+            parsed_data = self.parse_response_data(sheet_data)
 
             # 数据预处理
-            segments = self._preprocess_data(parsed_data, split_type)
+            segments = self.preprocess_data(parsed_data, split_type)
 
             # 分割
-            groups = self._make_segmentation_decisions(segments)
+            groups = self.segmentation_decisions(segments)
 
             # 片段优化
-            optimized_groups = self._optimize_segments(groups)
+            optimized_groups = self.optimize_segments(groups)
 
             return {
                 'sheet_id': sheet_range.sheet_id,
@@ -213,7 +213,7 @@ class SemanticSplitter:
             logger.error(f"Failed to process sheet {sheet_range.sheet_id}: {e}")
             raise SemanticSplitterError(f"Failed to process sheet {sheet_range.sheet_id}: {e}")
 
-    def _process_all_sheets(self, access_token: str, client_id: str,
+    def process_all_sheets(self, access_token: str, client_id: str,
                            file_id: str, open_id: str, split_type: int, sheet_info: Dict[str, Any]) -> List[Dict[str, Any]]:
         """
         处理所有工作表
@@ -231,7 +231,7 @@ class SemanticSplitter:
         """
         try:
             # 提取所有工作表信息
-            sheets = self._extract_sheet_range_info(sheet_info)
+            sheets = self.extract_sheet_info(sheet_info)
 
             if not sheets:
                 raise SemanticSplitterError("No sheets found in the spreadsheet")
@@ -244,7 +244,7 @@ class SemanticSplitter:
                 logger.info(f"Processing sheet {i}/{len(sheets)}: {sheet.sheet_id} "
                            f"(size: {sheet.row_count}x{sheet.column_count})")
                 try:
-                    result = self._process_single_sheet(access_token, client_id, file_id, open_id, split_type, sheet)
+                    result = self.process_single_sheet(access_token, client_id, file_id, open_id, split_type, sheet)
                     results.append(result)
                     logger.info(f"Successfully processed sheet {sheet.sheet_id}")
                 except Exception as e:
@@ -261,7 +261,7 @@ class SemanticSplitter:
         except Exception as e:
             raise SemanticSplitterError(f"Failed to process all sheets: {e}")
 
-    def _merge_sheet_results(self, sheet_results: List[Dict[str, Any]], sheet_info: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def merge_results(self, sheet_results: List[Dict[str, Any]], sheet_info: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """合并多个工作表的处理结果"""
         try:
             sheets_data = []
@@ -284,7 +284,7 @@ class SemanticSplitter:
                     # 将SegmentGroup转换为输出格式
                     sheet_segments = []
                     for group in segment_groups:
-                        output_segment = self._convert_segment_group_to_output(group)
+                        output_segment = self.convert_segmentgroup(group)
                         sheet_segments.append(output_segment)
                     sheet_data = {
                         'sheet_id': sheet_id,
@@ -300,7 +300,7 @@ class SemanticSplitter:
         except Exception as e:
             raise SemanticSplitterError(f"Failed to merge sheet results: {e}")
 
-    def _convert_segment_group_to_output(self, group) -> Dict[str, Any]:
+    def convert_segmentgroup(self, group) -> Dict[str, Any]:
         """
         将SegmentGroup转换为输出格式
 
@@ -326,7 +326,7 @@ class SemanticSplitter:
             segment_ids.append(segment.segment_id)
 
         # 确定组的类型
-        segment_type = self._determine_group_type(group)
+        segment_type = self.determine_grouptype(group)
 
         # 创建输出片段
         output_segment = {
@@ -340,7 +340,7 @@ class SemanticSplitter:
         }
         return output_segment
 
-    def _determine_group_type(self, group) -> str:
+    def determine_grouptype(self, group) -> str:
         """
         确定组的类型
 
@@ -365,16 +365,16 @@ class SemanticSplitter:
 
         return "mixed"
 
-    def _parse_response_data(self, raw_data: Dict[str, Any]) -> Dict[str, Any]:
+    def parse_response_data(self, raw_data: Dict[str, Any]) -> Dict[str, Any]:
         """解析响应数据"""
         try:
             # 解析表格数据响应，返回CellData列表
-            cells = self.response_parser.parse_sheet_data_response(raw_data)
+            cells = self.response_parser.parse_sheet_data(raw_data)
             return {"cells": cells}
         except Exception as e:
             raise SemanticSplitterError(f"Failed to parse response data: {e}")
     
-    def _preprocess_data(self, parsed_data: Dict[str, Any], split_type: int):
+    def preprocess_data(self, parsed_data: Dict[str, Any], split_type: int):
         """数据预处理"""
         try:
             # 从解析的数据中提取单元格数据
@@ -389,7 +389,7 @@ class SemanticSplitter:
             raise SemanticSplitterError(f"Failed to preprocess data: {e}")
     
 
-    def _make_segmentation_decisions(self, segments):
+    def segmentation_decisions(self, segments):
         """分割决策"""
         try:
             # 内部会计算相似度
@@ -397,7 +397,7 @@ class SemanticSplitter:
         except Exception as e:
             raise SemanticSplitterError(f"Failed to make segmentation decisions: {e}")
     
-    def _optimize_segments(self, groups):
+    def optimize_segments(self, groups):
         """片段优化"""
         try:
             return self.segment_optimizer.optimize_segments(groups)

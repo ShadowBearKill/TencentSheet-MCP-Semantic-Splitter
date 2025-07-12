@@ -10,7 +10,6 @@ from core.model_client import get_openai_client, OpenAIClientError
 
 
 class VectorBuilderError(Exception):
-    """向量构建异常"""
     pass
 
 
@@ -52,12 +51,12 @@ class LRUVectorCache:
             value: 向量值
         """
         if key in self.cache:
-            # 更新现有值并移到末尾
+            # 更新
             self.cache.move_to_end(key)
         else:
-            # 检查是否需要删除最久未使用的项
+            # 检查
             if len(self.cache) >= self.max_size:
-                # 删除最久未使用的项（第一个）
+                # 删除
                 self.cache.popitem(last=False)
         self.cache[key] = value
 
@@ -87,13 +86,6 @@ class VectorBuilder:
 
         # 使用LRU缓存替代无限制字典缓存
         self._vector_cache = LRUVectorCache(max_size=cache_size)
-
-        # 缓存统计
-        self._cache_stats = {
-            "hits": 0,
-            "misses": 0,
-            "total_requests": 0
-        }
         
         # 获取OpenAI客户端
         try:
@@ -113,27 +105,23 @@ class VectorBuilder:
             向量列表
         """
         text = text.strip()
-        self._cache_stats["total_requests"] += 1
         
         # 检查缓存
         if self.enable_cache:
             cached_vector = self.get_cached_vector(text)
             if cached_vector is not None:
-                self._cache_stats["hits"] += 1
                 logger.debug(f"Cache hit for text (length: {len(text)})")
                 return cached_vector
-            else:
-                self._cache_stats["misses"] += 1
         
         logger.info(f"Building vector for text (length: {len(text)})")
         
         try:
             # 调用OpenAI API生成向量
-            vector = self.client.create_embedding(text, model=self.model)
+            vector = self.client.embedding(text, model=self.model)
             
             # 缓存向量
             if self.enable_cache:
-                text_hash = self._get_text_hash(text)
+                text_hash = self.get_text_hash(text)
                 self._vector_cache.put(text_hash, vector)
                 logger.debug(f"Cached vector for text hash: {text_hash[:8]}...")
             
@@ -178,19 +166,16 @@ class VectorBuilder:
         uncached_indices = []
         
         for i, text in enumerate(valid_texts):
-            self._cache_stats["total_requests"] += 1
+
             
             if self.enable_cache:
                 cached_vector = self.get_cached_vector(text)
                 if cached_vector is not None:
                     cached_vectors[i] = cached_vector
-                    self._cache_stats["hits"] += 1
                     continue
             
             uncached_texts.append(text)
             uncached_indices.append(i)
-            if self.enable_cache:
-                self._cache_stats["misses"] += 1
         
         logger.info(f"Cache hits: {len(cached_vectors)}, Cache misses: {len(uncached_texts)}")
         
@@ -198,12 +183,12 @@ class VectorBuilder:
         new_vectors = []
         if uncached_texts:
             try:
-                new_vectors = self.client.create_embeddings(uncached_texts, model=self.model)
+                new_vectors = self.client.embeddings(uncached_texts, model=self.model)
                 
                 # 缓存新向量
                 if self.enable_cache:
                     for text, vector in zip(uncached_texts, new_vectors):
-                        text_hash = self._get_text_hash(text)
+                        text_hash = self.get_text_hash(text)
                         self._vector_cache.put(text_hash, vector)
                 
                 logger.info(f"Successfully built {len(new_vectors)} new vectors")
@@ -244,7 +229,7 @@ class VectorBuilder:
         if not self.enable_cache or not text:
             return None
         
-        text_hash = self._get_text_hash(text.strip())
+        text_hash = self.get_text_hash(text.strip())
         return self._vector_cache.get(text_hash)
     
     def clear_cache(self) -> int:
@@ -256,18 +241,12 @@ class VectorBuilder:
         """
         cache_size = self._vector_cache.size()
         self._vector_cache.clear()
-        
-        # 重置统计
-        self._cache_stats = {
-            "hits": 0,
-            "misses": 0,
-            "total_requests": 0
-        }
+
         
         logger.info(f"Cleared {cache_size} cached vectors")
         return cache_size
     
-    def _get_text_hash(self, text: str) -> str:
+    def get_text_hash(self, text: str) -> str:
         """
         获取文本的哈希值作为缓存键
         
@@ -284,17 +263,6 @@ class VectorBuilder:
 vector_builder = None
 
 def get_vector_builder(model: Optional[str] = None, enable_cache: bool = True, cache_size: int = 1000) -> VectorBuilder:
-    """
-    获取向量构建器实例
-
-    Args:
-        model: 嵌入模型名称
-        enable_cache: 是否启用缓存
-        cache_size: 缓存大小限制
-
-    Returns:
-        向量构建器实例
-    """
     global vector_builder
     if vector_builder is None:
         vector_builder = VectorBuilder(model=model, enable_cache=enable_cache, cache_size=cache_size)

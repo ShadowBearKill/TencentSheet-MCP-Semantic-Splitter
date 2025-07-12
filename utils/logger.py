@@ -27,9 +27,9 @@ class Logger:
         
         # 避免重复添加处理器
         if not self.logger.handlers:
-            self._setup_handlers(log_file)
+            self.setup_handlers(log_file)
     
-    def _setup_handlers(self, log_file: Optional[str]):
+    def setup_handlers(self, log_file: Optional[str]):
         """设置日志处理器"""
         # 创建格式化器
         formatter = logging.Formatter(

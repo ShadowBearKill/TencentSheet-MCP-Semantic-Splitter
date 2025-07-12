@@ -12,7 +12,6 @@ import numpy as np
 
 
 class SimilarityCalculatorError(Exception):
-    """相似度计算器异常"""
     pass
 
 
@@ -273,7 +272,7 @@ class SimilarityCalculator:
 # 全局实例
 similarity_calculator = None
 
-def get_similarity_calculator(vector_model: Optional[str] = None, 
+def get_similarity(vector_model: Optional[str] = None, 
                             enable_vector_cache: bool = True) -> SimilarityCalculator:
     """
     获取相似度计算器实例

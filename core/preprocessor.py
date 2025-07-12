@@ -9,7 +9,6 @@ from api.response_parser import CellData
 
 
 class PreprocessorError(Exception):
-    """预处理器异常"""
     pass
 
 
@@ -275,15 +274,6 @@ class Preprocessor:
 preprocessor = None
 
 def get_preprocessor(min_content_length: int = 1) -> Preprocessor:
-    """
-    获取预处理器实例
-    
-    Args:
-        min_content_length: 最小内容长度
-        
-    Returns:
-        预处理器实例
-    """
     global preprocessor
     if preprocessor is None:
         preprocessor = Preprocessor(min_content_length=min_content_length)

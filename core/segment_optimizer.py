@@ -11,7 +11,6 @@ from core.segment_decider import SegmentGroup, get_segment_decider
 
 
 class SegmentOptimizerError(Exception):
-    """片段优化器异常"""
     pass
 
 
@@ -111,7 +110,7 @@ class SegmentOptimizer:
                 if len(segment.content) < self.min_segment_length:
                     logger.debug(f"Small segment found: {segment.segment_id}, length={len(segment.content)}")
                     # 尝试找到最相似的组进行合并
-                    merged = self._try_merge_with_most_similar(segment, result_groups)
+                    merged = self.merge_most_similar(segment, result_groups)
                     if not merged:
                         # 如果无法合并，仍然保留为单独的组
                         result_groups.append(group)
@@ -120,12 +119,12 @@ class SegmentOptimizer:
                     result_groups.append(group)
             else:
                 # 组内有多个片段，贪心算法进行合并
-                optimized_segments = self._merge_small_segments_within_group(group.segments)
+                optimized_segments = self.merge_ingroup(group.segments)
                 new_group = SegmentGroup(group.group_id, optimized_segments)
                 result_groups.append(new_group)
         return result_groups
     
-    def _try_merge_with_most_similar(self, segment: TextSegment, 
+    def merge_most_similar(self, segment: TextSegment, 
                                    groups: List[SegmentGroup]) -> bool:
         """
         尝试将片段与最相似的组合并
@@ -174,7 +173,7 @@ class SegmentOptimizer:
         
         return False
     
-    def _merge_small_segments_within_group(self, segments: List[TextSegment]) -> List[TextSegment]:
+    def merge_ingroup(self, segments: List[TextSegment]) -> List[TextSegment]:
         """
         合并组内的小片段
         
@@ -199,7 +198,7 @@ class SegmentOptimizer:
             # 如果当前片段很小，尝试与下一个合并
             if len(current_segment.content) < self.min_segment_length:
                 # 合并片段
-                merged_segment = self._merge_two_segments(current_segment, next_segment)
+                merged_segment = self.merge_two_segments(current_segment, next_segment)
                 current_segment = merged_segment
             else:
                 # 当前片段足够大，添加到结果中
@@ -211,7 +210,7 @@ class SegmentOptimizer:
         
         return result_segments
     
-    def _merge_two_segments(self, segment1: TextSegment, segment2: TextSegment) -> TextSegment:
+    def merge_two_segments(self, segment1: TextSegment, segment2: TextSegment) -> TextSegment:
         """
         合并两个片段
         
@@ -295,7 +294,7 @@ class SegmentOptimizer:
             
             # 拆分每个大片段
             for i, large_segment in enumerate(large_segments):
-                split_segments = self._split_segment(large_segment)
+                split_segments = self.split_segment(large_segment)
                 
                 # 如果成功拆分，为每个拆分片段创建新组
                 if len(split_segments) > 1:
@@ -311,7 +310,7 @@ class SegmentOptimizer:
         
         return result_groups
     
-    def _split_segment(self, segment: TextSegment) -> List[TextSegment]:
+    def split_segment(self, segment: TextSegment) -> List[TextSegment]:
         """
         拆分大片段
         
@@ -326,20 +325,20 @@ class SegmentOptimizer:
         logger.debug(f"Splitting large segment {segment.segment_id}, length={len(content)}")
         
         # 尝试在句子边界拆分
-        split_segments = self._split_at_sentence_boundaries(segment)
+        split_segments = self.split_sentence(segment)
         
         # 如果无法在句子边界拆分，尝试在段落边界拆分
         if len(split_segments) <= 1:
-            split_segments = self._split_at_paragraph_boundaries(segment)
+            split_segments = self.split_paragraph(segment)
         
         # 如果仍然无法拆分，强制按长度拆分
         if len(split_segments) <= 1:
-            split_segments = self._force_split_by_length(segment)
+            split_segments = self.split_length(segment)
         
         logger.debug(f"Split segment {segment.segment_id} into {len(split_segments)} parts")
         return split_segments
     
-    def _split_at_sentence_boundaries(self, segment: TextSegment) -> List[TextSegment]:
+    def split_sentence(self, segment: TextSegment) -> List[TextSegment]:
         """
         在句子边界拆分片段
         
@@ -355,9 +354,9 @@ class SegmentOptimizer:
         sentence_pattern = r'(?<=[.!?。！？])\s+'
         sentences = re.split(sentence_pattern, content)
         
-        return self._create_split_segments(segment, sentences, "sentence")
+        return self.create_split_segments(segment, sentences, "sentence")
     
-    def _split_at_paragraph_boundaries(self, segment: TextSegment) -> List[TextSegment]:
+    def split_paragraph(self, segment: TextSegment) -> List[TextSegment]:
         """
         在段落边界拆分片段
         
@@ -372,9 +371,9 @@ class SegmentOptimizer:
         # 使用换行符拆分段落
         paragraphs = re.split(r'\n+', content)
         
-        return self._create_split_segments(segment, paragraphs, "paragraph")
+        return self.create_split_segments(segment, paragraphs, "paragraph")
     
-    def _force_split_by_length(self, segment: TextSegment) -> List[TextSegment]:
+    def split_length(self, segment: TextSegment) -> List[TextSegment]:
         """
         强制按长度拆分片段
 
@@ -400,9 +399,9 @@ class SegmentOptimizer:
                 part = part[:self.max_segment_length]
             parts.append(part)
 
-        return self._create_split_segments(segment, parts, "length")
+        return self.create_split_segments(segment, parts, "length")
     
-    def _create_split_segments(self, original_segment: TextSegment, 
+    def create_split_segments(self, original_segment: TextSegment, 
                              parts: List[str], split_type: str) -> List[TextSegment]:
         """
         根据拆分的部分创建新片段
@@ -489,18 +488,6 @@ segment_optimizer = None
 def get_segment_optimizer(min_segment_length: int = 10, max_segment_length: int = 1000,
                          similarity_threshold: float = 0.7,
                          vector_model: Optional[str] = None) -> SegmentOptimizer:
-    """
-    获取片段优化器实例
-    
-    Args:
-        min_segment_length: 最小片段长度
-        max_segment_length: 最大片段长度
-        similarity_threshold: 相似度阈值
-        vector_model: 向量模型名称
-        
-    Returns:
-        片段优化器实例
-    """
     global segment_optimizer
     if segment_optimizer is None:
         segment_optimizer = SegmentOptimizer(

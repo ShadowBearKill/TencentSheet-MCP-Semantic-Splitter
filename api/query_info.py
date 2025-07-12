@@ -9,7 +9,6 @@ from config.params import config
 
 
 class SheetInfoQueryError(Exception):
-    """表格信息查询异常"""
     pass
 
 
@@ -17,11 +16,10 @@ class SheetInfoQuery:
     """在线表格信息查询类"""
     
     def __init__(self):
-        """初始化查询客户端"""
         self.base_url = config.sheet_base_url
         self.timeout = 30  # 请求超时时间
     
-    def query_sheet_info(
+    def query(
         self, 
         file_id: str, 
         access_token: str, 
@@ -49,7 +47,7 @@ class SheetInfoQuery:
                 url += "?concise=0"
             
             # 请求头
-            headers = config.get_sheet_headers(access_token, client_id, open_id)
+            headers = config.get_headers(access_token, client_id, open_id)
             
             logger.info(f"Querying sheet info for file_id: {file_id}")
             logger.debug(f"Request URL: {url}")
@@ -95,8 +93,5 @@ sheet_info_query = SheetInfoQuery()
 def get_sheet_info_query() -> SheetInfoQuery:
     """
     获取表格信息查询器实例
-
-    Returns:
-        SheetInfoQuery实例
     """
     return sheet_info_query

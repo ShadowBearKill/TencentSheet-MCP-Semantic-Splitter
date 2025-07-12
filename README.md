@@ -110,6 +110,7 @@ python mcp_server.py
 **属性：** 
 - group_id: 分组唯一标识: str
 - segments: TextSegment列表: List[TextSegment]
+- segment_ids: segments的id列表: List[str]
 
 4. CellData
 **属性：** 
@@ -123,7 +124,7 @@ python mcp_server.py
 
 ### 核心函数
 
-1. _query_sheet_info()
+1. query_sheet_info()
 **功能：** 查询表格基本信息
 **返回值类型：** `Dict[str, Any]`
 **返回值结构：**
@@ -141,7 +142,7 @@ python mcp_server.py
   ]
 }
 ```
-2. _extract_sheet_range_info()
+2. extract_sheet_range_info()
 **功能：** 从表格信息中提取工作表信息
 **返回值类型：** `List[SheetInfo]`
 **返回值结构：**
@@ -149,7 +150,7 @@ python mcp_server.py
 [SheetInfo对象列表]
 ```
 
-3. _process_single_sheet()
+3. process_single_sheet()
 **功能：** 处理单个工作表
 **返回值类型：** `Dict[str, Any]`
 **返回值结构：**
@@ -169,9 +170,10 @@ python mcp_server.py
 ```
 
 
+
 ### process_sheet函数执行流程及返回值结构
 
-#### 1. _query_sheet_info() 函数
+#### 1. query_sheet_info() 函数
 **功能：** 查询表格基本信息
 **返回值类型：** `Dict[str, Any]`
 **返回值结构：**
@@ -191,7 +193,7 @@ python mcp_server.py
 }
 ```
 
-#### 2. _process_all_sheets() 函数
+#### 2. process_all_sheets() 函数
 **功能：** 处理所有工作表
 **返回值类型：** `List[Dict[str, Any]]`
 **返回值结构：**
@@ -211,7 +213,7 @@ python mcp_server.py
 ]
 ```
 
-#### 3. _process_single_sheet() 函数
+#### 3. process_single_sheet() 函数
 **功能：** 处理单个工作表
 **返回值类型：** `Dict[str, Any]`
 **返回值结构：**
@@ -230,7 +232,7 @@ python mcp_server.py
 }
 ```
 
-#### 4. _query_sheet_data() 函数
+#### 4. query_sheet_data() 函数
 **功能：** 查询表格数据（支持大范围自动分块查询）
 **返回值类型：** `Dict[str, Any]`
 **单次查询返回值结构：**
@@ -258,23 +260,23 @@ python mcp_server.py
 }
 ```
 
-#### 5. _parse_response_data() 函数
+#### 5. parse_response_data() 函数
 **功能：** 解析工作表响应数据
 **返回值类型：** `Dict[str, Any]`
 
-#### 6. _preprocess_data() 函数
+#### 6. preprocess_data() 函数
 **功能：** 数据预处理，将CellData列表转换为TextSegment。即将单元格通过行|列|单元格进行切分，并过滤掉空的segment或者长度过小的segment，得到TextSegment列表。
 **返回值类型：** `List[TextSegment]`
 
-#### 7. _make_segmentation_decisions() 函数
+#### 7. segmentation_decisions() 函数
 **功能：** 基于相似度矩阵进行分割决策，通过计算不同segment之间的相似度，得到相似度矩阵。构建segments之间的邻接表，如果两个segment的相似度大于阈值，则在邻接表中添加一条边。对邻接表进行连通分量分解，使用DFS求解得到所有连通分量，即最终的segment分组。
 **返回值类型：** `List[SegmentGroup]`
 
-#### 8. _optimize_segments() 函数
+#### 8. optimize_segments() 函数
 **功能：** 优化片段组，包括合并小片段和拆分大片段。
 **返回值类型：** `List[SegmentGroup]`
 
-#### 9. _merge_sheet_results() 函数
+#### 9. merge_results() 函数
 **功能：** 合并多个工作表的处理结果，也即MCP tool最后的返回结果
 **返回值类型：** `Dict[str, Any]`
 **最终输出结构：**

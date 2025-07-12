@@ -11,7 +11,6 @@ from config.params import config
 
 
 class OpenAIClientError(Exception):
-    """OpenAI客户端异常"""
     pass
 
 
@@ -50,7 +49,7 @@ class OpenAIClient:
         
         logger.info(f"OpenAI client initialized with model: {self.model}")
     
-    def create_embedding(self, text: str, 
+    def embedding(self, text: str, 
                         model: Optional[str] = None) -> List[float]:
         """
         创建单个文本嵌入
@@ -67,7 +66,7 @@ class OpenAIClient:
         logger.info(f"Creating embeddings for {len(texts)} text(s) using model: {model}")
         try:
             # 调用API
-            response = self._call_with_retry(
+            response = self.retry(
                 lambda: self.client.embeddings.create(
                     input=texts,
                     model=model
@@ -84,7 +83,7 @@ class OpenAIClient:
             logger.error(error_msg)
             raise OpenAIClientError(error_msg)
         
-    def create_embeddings(self, texts: List[str], 
+    def embeddings(self, texts: List[str], 
                         model: Optional[str] = None) -> List[List[float]]:
         """
         创建多个文本的嵌入
@@ -100,7 +99,7 @@ class OpenAIClient:
         logger.info(f"Creating embeddings for {len(texts)} text(s) using model: {model}")
         try:
             # 调用API
-            response = self._call_with_retry(
+            response = self.retry(
                 lambda: self.client.embeddings.create(
                     input=texts,
                     model=model
@@ -115,7 +114,7 @@ class OpenAIClient:
             logger.error(error_msg)
             raise OpenAIClientError(error_msg)
     
-    def _call_with_retry(self, func, *args, **kwargs):
+    def retry(self, func, *args, **kwargs):
         """
         带重试机制的API调用
         
@@ -126,9 +125,6 @@ class OpenAIClient:
             
         Returns:
             函数返回值
-            
-        Raises:
-            OpenAIClientError: 重试失败后抛出
         """
         last_exception = None
         delay = self.retry_delay
@@ -137,42 +133,10 @@ class OpenAIClient:
             try:
                 return func(*args, **kwargs)
                 
-            except openai.RateLimitError as e:
-                last_exception = e
-                if attempt < self.max_retries:
-                    logger.warning(f"Rate limit exceeded, retrying in {delay} seconds (attempt {attempt + 1}/{self.max_retries + 1})")
-                    time.sleep(delay)
-                    delay *= self.backoff_factor
-                    continue
-                else:
-                    raise OpenAIClientError(f"Rate limit exceeded after {self.max_retries} retries: {e}")
-            
-            except openai.APITimeoutError as e:
-                last_exception = e
-                if attempt < self.max_retries:
-                    logger.warning(f"API timeout, retrying in {delay} seconds (attempt {attempt + 1}/{self.max_retries + 1})")
-                    time.sleep(delay)
-                    delay *= self.backoff_factor
-                    continue
-                else:
-                    raise OpenAIClientError(f"API timeout after {self.max_retries} retries: {e}")
-            
-            except openai.APIConnectionError as e:
-                last_exception = e
-                if attempt < self.max_retries:
-                    logger.warning(f"API connection error, retrying in {delay} seconds (attempt {attempt + 1}/{self.max_retries + 1})")
-                    time.sleep(delay)
-                    delay *= self.backoff_factor
-                    continue
-                else:
-                    raise OpenAIClientError(f"API connection error after {self.max_retries} retries: {e}")
-            
             except openai.AuthenticationError as e:
-                # 认证错误不重试
                 raise OpenAIClientError(f"Authentication error: {e}")
             
             except openai.BadRequestError as e:
-                # 请求错误不重试
                 raise OpenAIClientError(f"Bad request error: {e}")
             
             except Exception as e:
@@ -185,7 +149,6 @@ class OpenAIClient:
                 else:
                     raise OpenAIClientError(f"Unexpected error after {self.max_retries} retries: {e}")
         
-        # 如果所有重试都失败了
         raise OpenAIClientError(f"All retries failed. Last exception: {last_exception}")
     
 
@@ -193,12 +156,6 @@ class OpenAIClient:
 openai_client = None
 
 def get_openai_client() -> OpenAIClient:
-    """
-    获取全局OpenAI客户端实例
-    
-    Returns:
-        OpenAI客户端实例
-    """
     global openai_client
     if openai_client is None:
         openai_client = OpenAIClient()
